@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>クッキーエスケープ</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: #1a1a2e;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+
+  #game-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+  }
+
+  #hud {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 480px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 12px;
+  }
+
+  #hud .hud-item {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fde68a;
+  }
+
+  #hud .hud-lives {
+    font-size: 1rem;
+  }
+
+  #hud .hud-level {
+    color: #a78bfa;
+  }
+
+  canvas {
+    display: block;
+    border-radius: 8px;
+    image-rendering: pixelated;
+    max-width: 100%;
+    touch-action: none;
+  }
+
+  #overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(26, 26, 46, 0.92);
+    border-radius: 8px;
+    z-index: 10;
+    padding: 20px;
+    text-align: center;
+  }
+
+  #overlay.hidden { display: none; }
+
+  #overlay h2 {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #fde68a;
+    margin-bottom: 8px;
+  }
+
+  #overlay p {
+    font-size: 0.85rem;
+    color: #e2d5c0;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  #overlay .highlight {
+    color: #f59e0b;
+    font-weight: 700;
+  }
+
+  #overlay button {
+    padding: 12px 36px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 1rem;
+    font-weight: 900;
+    border: none;
+    border-radius: 50px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #overlay button:hover { transform: scale(1.05); }
+  #overlay button:active { transform: scale(0.97); }
+
+  #mobile-controls {
+    display: none;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 10px;
+  }
+
+  .dpad {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 4px;
+    width: 180px;
+    height: 180px;
+    margin: 0 auto;
+  }
+
+  .dpad-btn {
+    background: rgba(255,255,255,0.12);
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 12px;
+    color: #fde68a;
+    font-size: 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    transition: background 0.1s;
+  }
+
+  .dpad-btn:active, .dpad-btn.active {
+    background: rgba(245, 158, 11, 0.4);
+    border-color: #f59e0b;
+  }
+
+  .dpad-empty { background: transparent; border: none; }
+
+  #back-link {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 0.75rem;
+    color: #a78bfa;
+    text-decoration: none;
+  }
+
+  #back-link:hover { color: #c4b5fd; }
+
+  @media (max-width: 600px) {
+    #mobile-controls { display: block; }
+    #hud { max-width: 100%; }
+    #hud .hud-item { font-size: 0.75rem; }
+  }
+
+  @media (max-width: 400px) {
+    .dpad { width: 150px; height: 150px; }
+    .dpad-btn { font-size: 1.3rem; border-radius: 10px; }
+    #overlay h2 { font-size: 1.3rem; }
+    #overlay p { font-size: 0.78rem; }
+  }
+
+  @media (min-height: 800px) and (max-width: 600px) {
+    .dpad { width: 200px; height: 200px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="game-wrapper">
+  <div id="hud">
+    <span class="hud-item hud-level" id="hud-level">レベル 1</span>
+    <span class="hud-item" id="hud-score">スコア: 0</span>
+    <span class="hud-item hud-lives" id="hud-lives">🍪🍪🍪</span>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <div id="overlay">
+    <h2>🍪 クッキーエスケープ 🍪</h2>
+    <p>
+      クッキーを動かして、<span class="highlight">おばけ</span>から逃げよう！<br>
+      ドットを全部食べたらクリア！<br><br>
+      🎮 矢印キー / スワイプ / D-Pad で操作<br>
+      ⭐ パワーアップを取ると、おばけを食べられるよ！
+    </p>
+    <button id="start-btn">スタート</button>
+  </div>
+
+  <div id="mobile-controls">
+    <div class="dpad">
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" data-dir="up">▲</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" data-dir="left">◀</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" data-dir="right">▶</div>
+      <div class="dpad-empty"></div>
+      <div class="dpad-btn" data-dir="down">▼</div>
+      <div class="dpad-empty"></div>
+    </div>
+  </div>
+
+  <a href="index.html" id="back-link">← ゲーム一覧に戻る</a>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ===== Constants =====
+  const TILE = 24;
+  const COLS = 19;
+  const ROWS = 21;
+  const W = COLS * TILE;
+  const H = ROWS * TILE;
+
+  const DIR = { NONE: -1, UP: 0, DOWN: 1, LEFT: 2, RIGHT: 3 };
+  const DX = [0, 0, -1, 1];
+  const DY = [-1, 1, 0, 0];
+
+  // Tile types
+  const EMPTY = 0;
+  const WALL = 1;
+  const DOT = 2;
+  const POWER = 3;
+  const GHOST_HOME = 4;
+  const TUNNEL = 5;
+
+  // Ghost colors
+  const GHOST_COLORS = ['#ff6b6b', '#6bcaff', '#ffb86b', '#c06bff'];
+  const GHOST_NAMES = ['アカオ', 'アオミ', 'オレン', 'ムラサ'];
+
+  // ===== Maze layouts per level =====
+  // 1=wall, 0=dot, 2=empty, 3=power, 4=ghost home, 5=tunnel
+  const MAZE_TEMPLATES = [
+    // Level 1 - Classic layout
+    [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+      [1,3,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,3,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,0,1],
+      [1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1],
+      [1,1,1,1,0,1,1,1,2,1,2,1,1,1,0,1,1,1,1],
+      [1,1,1,1,0,1,2,2,2,2,2,2,2,1,0,1,1,1,1],
+      [1,1,1,1,0,1,2,1,1,4,1,1,2,1,0,1,1,1,1],
+      [5,2,2,2,0,2,2,1,4,4,4,1,2,2,0,2,2,2,5],
+      [1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1],
+      [1,1,1,1,0,1,2,2,2,2,2,2,2,1,0,1,1,1,1],
+      [1,1,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
+      [1,3,0,1,0,0,0,0,0,2,0,0,0,0,0,1,0,3,1],
+      [1,1,0,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1],
+      [1,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,1],
+      [1,0,1,1,1,1,1,1,0,1,0,1,1,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    // Level 2 - More open
+    [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,0,1,0,1,1,1,0,1,0,1,1,1,0,1],
+      [1,3,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,3,1],
+      [1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0,1,0,1],
+      [1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1],
+      [1,0,1,0,1,1,1,1,2,1,2,1,1,1,1,0,1,0,1],
+      [1,0,0,0,0,0,0,2,2,2,2,2,0,0,0,0,0,0,1],
+      [1,1,1,0,1,1,2,1,1,4,1,1,2,1,1,0,1,1,1],
+      [5,2,2,0,0,1,2,1,4,4,4,1,2,1,0,0,2,2,5],
+      [1,1,1,0,1,1,2,1,1,1,1,1,2,1,1,0,1,1,1],
+      [1,0,0,0,0,0,0,2,2,2,2,2,0,0,0,0,0,0,1],
+      [1,0,1,0,1,1,1,1,2,1,2,1,1,1,1,0,1,0,1],
+      [1,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,1],
+      [1,0,1,0,1,0,1,0,0,0,0,0,1,0,1,0,1,0,1],
+      [1,3,0,0,0,0,1,0,1,1,1,0,1,0,0,0,0,3,1],
+      [1,0,1,1,1,0,1,0,0,0,0,0,1,0,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+    // Level 3 - Tricky corridors
+    [
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+      [1,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,1],
+      [1,3,1,1,0,1,0,1,1,1,1,1,0,1,0,1,1,3,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,0,1,0,1,1,0,1,1,1,0,1,1,0,1,0,1,1],
+      [1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1],
+      [1,0,1,1,1,1,0,1,2,1,2,1,0,1,1,1,1,0,1],
+      [1,0,0,0,0,0,0,1,2,2,2,1,0,0,0,0,0,0,1],
+      [1,0,1,1,0,1,2,1,1,4,1,1,2,1,0,1,1,0,1],
+      [5,2,0,0,0,1,2,1,4,4,4,1,2,1,0,0,0,2,5],
+      [1,0,1,1,0,1,2,1,1,1,1,1,2,1,0,1,1,0,1],
+      [1,0,0,0,0,0,0,1,2,2,2,1,0,0,0,0,0,0,1],
+      [1,0,1,1,1,1,0,1,2,1,2,1,0,1,1,1,1,0,1],
+      [1,0,0,1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,1],
+      [1,1,0,1,0,1,1,0,0,0,0,0,1,1,0,1,0,1,1],
+      [1,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,0,1],
+      [1,3,1,1,0,1,0,0,0,0,0,0,0,1,0,1,1,3,1],
+      [1,0,0,0,0,1,0,1,0,1,0,1,0,1,0,0,0,0,1],
+      [1,0,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,0,1],
+      [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    ],
+  ];
+
+  // ===== Canvas setup =====
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  canvas.width = W;
+  canvas.height = H;
+
+  // Scale canvas for high-DPI
+  function resizeCanvas() {
+    const wrapper = document.getElementById('game-wrapper');
+    const maxW = Math.min(wrapper.clientWidth - 16, 560);
+    const scale = Math.min(maxW / W, 1);
+    canvas.style.width = (W * scale) + 'px';
+    canvas.style.height = (H * scale) + 'px';
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // ===== Game State =====
+  let state = {
+    maze: [],
+    dots: 0,
+    dotsEaten: 0,
+    score: 0,
+    lives: 3,
+    level: 1,
+    running: false,
+    paused: false,
+    gameOver: false,
+    won: false,
+    powerMode: false,
+    powerTimer: 0,
+    cookie: null,
+    ghosts: [],
+    frameTick: 0,
+  };
+
+  // ===== Cookie (Player) =====
+  function createCookie() {
+    return {
+      x: 9, y: 15,
+      dir: DIR.NONE,
+      nextDir: DIR.NONE,
+      moveProgress: 0,
+      mouthAngle: 0,
+      mouthDir: 1,
+    };
+  }
+
+  // ===== Ghosts =====
+  function createGhost(i) {
+    const homeX = 8 + i;
+    const homeY = 9;
+    return {
+      x: homeX, y: homeY,
+      homeX: homeX, homeY: homeY,
+      dir: DIR.UP,
+      moveProgress: 0,
+      color: GHOST_COLORS[i],
+      mode: 'home', // home, chase, scatter, frightened, eaten
+      homeTimer: i * 80 + 40,
+      frightTimer: 0,
+      eatenReturn: false,
+      eyeDir: DIR.LEFT,
+      speed: 0.9 + state.level * 0.08,
+    };
+  }
+
+  // ===== Maze helpers =====
+  function loadMaze(level) {
+    const idx = (level - 1) % MAZE_TEMPLATES.length;
+    const template = MAZE_TEMPLATES[idx];
+    state.maze = [];
+    state.dots = 0;
+    for (let r = 0; r < ROWS; r++) {
+      state.maze[r] = [];
+      for (let c = 0; c < COLS; c++) {
+        const v = template[r][c];
+        state.maze[r][c] = v;
+        if (v === DOT || v === POWER) state.dots++;
+      }
+    }
+  }
+
+  function tileAt(x, y) {
+    if (y < 0 || y >= ROWS) return WALL;
+    if (x < 0 || x >= COLS) {
+      // tunnel check
+      if (y === 9) return TUNNEL;
+      return WALL;
+    }
+    return state.maze[y][x];
+  }
+
+  function isWalkable(x, y) {
+    const t = tileAt(x, y);
+    return t !== WALL;
+  }
+
+  function canMove(x, y, dir) {
+    const nx = x + DX[dir];
+    const ny = y + DY[dir];
+    // Tunnel wrap
+    if (nx < 0 && y === 9) return true;
+    if (nx >= COLS && y === 9) return true;
+    return isWalkable(nx, ny) && tileAt(nx, ny) !== GHOST_HOME;
+  }
+
+  function canMoveGhost(x, y, dir, isEaten) {
+    const nx = x + DX[dir];
+    const ny = y + DY[dir];
+    if (nx < 0 && y === 9) return true;
+    if (nx >= COLS && y === 9) return true;
+    if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return false;
+    const t = state.maze[ny][nx];
+    if (t === WALL) return false;
+    return true;
+  }
+
+  // ===== Initialization =====
+  function initLevel() {
+    loadMaze(state.level);
+    state.dotsEaten = 0;
+    state.powerMode = false;
+    state.powerTimer = 0;
+    state.cookie = createCookie();
+    state.ghosts = [];
+    for (let i = 0; i < Math.min(4, 2 + state.level); i++) {
+      state.ghosts.push(createGhost(i));
+    }
+    state.frameTick = 0;
+  }
+
+  function startGame() {
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+    state.gameOver = false;
+    state.won = false;
+    initLevel();
+    state.running = true;
+    updateHUD();
+    hideOverlay();
+  }
+
+  // ===== Movement =====
+  const COOKIE_SPEED = 1.0;
+
+  function moveCookie() {
+    const c = state.cookie;
+    if (c.dir === DIR.NONE && c.nextDir === DIR.NONE) return;
+
+    // Try to switch to desired direction
+    if (c.nextDir !== DIR.NONE && c.moveProgress === 0) {
+      if (canMove(c.x, c.y, c.nextDir)) {
+        c.dir = c.nextDir;
+        c.nextDir = DIR.NONE;
+      }
+    }
+
+    if (c.dir === DIR.NONE) return;
+
+    if (c.moveProgress === 0) {
+      if (!canMove(c.x, c.y, c.dir)) {
+        c.dir = DIR.NONE;
+        return;
+      }
+    }
+
+    c.moveProgress += COOKIE_SPEED * 0.15;
+
+    if (c.moveProgress >= 1) {
+      c.moveProgress = 0;
+      c.x += DX[c.dir];
+      c.y += DY[c.dir];
+
+      // Tunnel wrap
+      if (c.x < 0) c.x = COLS - 1;
+      if (c.x >= COLS) c.x = 0;
+
+      // Eat dot
+      if (state.maze[c.y] && state.maze[c.y][c.x] === DOT) {
+        state.maze[c.y][c.x] = EMPTY;
+        state.dotsEaten++;
+        state.score += 10;
+      } else if (state.maze[c.y] && state.maze[c.y][c.x] === POWER) {
+        state.maze[c.y][c.x] = EMPTY;
+        state.dotsEaten++;
+        state.score += 50;
+        activatePowerMode();
+      }
+
+      // Check level clear
+      if (state.dotsEaten >= state.dots) {
+        levelClear();
+        return;
+      }
+
+      // Continue or stop
+      if (!canMove(c.x, c.y, c.dir)) {
+        c.dir = DIR.NONE;
+      }
+    }
+
+    // Mouth animation
+    c.mouthAngle += 0.15 * c.mouthDir;
+    if (c.mouthAngle > 0.35) c.mouthDir = -1;
+    if (c.mouthAngle < 0.02) c.mouthDir = 1;
+  }
+
+  function moveGhosts() {
+    for (const g of state.ghosts) {
+      // Home timer
+      if (g.mode === 'home') {
+        g.homeTimer--;
+        if (g.homeTimer <= 0) {
+          g.mode = 'chase';
+          g.x = 9;
+          g.y = 8;
+          g.dir = DIR.UP;
+          g.moveProgress = 0;
+        }
+        continue;
+      }
+
+      // Eaten: return home
+      if (g.mode === 'eaten') {
+        moveGhostToward(g, 9, 9, true);
+        if (g.x === 9 && g.y === 9 && g.moveProgress === 0) {
+          g.mode = 'chase';
+          g.frightTimer = 0;
+        }
+        continue;
+      }
+
+      // Frightened countdown
+      if (g.mode === 'frightened') {
+        g.frightTimer--;
+        if (g.frightTimer <= 0) {
+          g.mode = 'chase';
+        }
+      }
+
+      // Move
+      const speed = g.mode === 'frightened' ? 0.08 : 0.1 + state.level * 0.008;
+      g.moveProgress += speed;
+
+      if (g.moveProgress >= 1) {
+        g.moveProgress = 0;
+        g.x += DX[g.dir];
+        g.y += DY[g.dir];
+
+        // Tunnel wrap
+        if (g.x < 0) g.x = COLS - 1;
+        if (g.x >= COLS) g.x = 0;
+
+        // Choose next direction
+        chooseGhostDir(g);
+      }
+    }
+  }
+
+  function chooseGhostDir(g) {
+    const c = state.cookie;
+    let targetX, targetY;
+
+    if (g.mode === 'frightened') {
+      // Random direction
+      const dirs = [];
+      for (let d = 0; d < 4; d++) {
+        if (d === oppositeDir(g.dir)) continue;
+        if (canMoveGhost(g.x, g.y, d, false)) dirs.push(d);
+      }
+      if (dirs.length > 0) {
+        g.dir = dirs[Math.floor(Math.random() * dirs.length)];
+      } else if (canMoveGhost(g.x, g.y, oppositeDir(g.dir), false)) {
+        g.dir = oppositeDir(g.dir);
+      }
+      return;
+    }
+
+    // Chase target
+    targetX = c.x;
+    targetY = c.y;
+
+    // Pick best direction toward target
+    let bestDir = g.dir;
+    let bestDist = Infinity;
+    const dirs = [];
+
+    for (let d = 0; d < 4; d++) {
+      if (d === oppositeDir(g.dir)) continue;
+      if (canMoveGhost(g.x, g.y, d, false)) dirs.push(d);
+    }
+
+    if (dirs.length === 0) {
+      if (canMoveGhost(g.x, g.y, oppositeDir(g.dir), false)) {
+        g.dir = oppositeDir(g.dir);
+      }
+      return;
+    }
+
+    for (const d of dirs) {
+      const nx = g.x + DX[d];
+      const ny = g.y + DY[d];
+      const dist = Math.abs(nx - targetX) + Math.abs(ny - targetY);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestDir = d;
+      }
+    }
+
+    g.dir = bestDir;
+    g.eyeDir = bestDir;
+  }
+
+  function moveGhostToward(g, tx, ty, isEaten) {
+    const speed = 0.18;
+    g.moveProgress += speed;
+
+    if (g.moveProgress >= 1) {
+      g.moveProgress = 0;
+      g.x += DX[g.dir];
+      g.y += DY[g.dir];
+      if (g.x < 0) g.x = COLS - 1;
+      if (g.x >= COLS) g.x = 0;
+
+      // Pick direction toward target
+      let bestDir = g.dir;
+      let bestDist = Infinity;
+      for (let d = 0; d < 4; d++) {
+        if (canMoveGhost(g.x, g.y, d, isEaten)) {
+          const nx = g.x + DX[d];
+          const ny = g.y + DY[d];
+          const dist = Math.abs(nx - tx) + Math.abs(ny - ty);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestDir = d;
+          }
+        }
+      }
+      g.dir = bestDir;
+      g.eyeDir = bestDir;
+    }
+  }
+
+  function oppositeDir(d) {
+    if (d === DIR.UP) return DIR.DOWN;
+    if (d === DIR.DOWN) return DIR.UP;
+    if (d === DIR.LEFT) return DIR.RIGHT;
+    if (d === DIR.RIGHT) return DIR.LEFT;
+    return DIR.NONE;
+  }
+
+  // ===== Collision =====
+  function checkCollisions() {
+    const c = state.cookie;
+    for (const g of state.ghosts) {
+      if (g.mode === 'home' || g.mode === 'eaten') continue;
+      const dx = Math.abs((g.x + DX[g.dir] * g.moveProgress) - (c.x + (c.dir >= 0 ? DX[c.dir] * c.moveProgress : 0)));
+      const dy = Math.abs((g.y + DY[g.dir] * g.moveProgress) - (c.y + (c.dir >= 0 ? DY[c.dir] * c.moveProgress : 0)));
+      if (dx < 0.8 && dy < 0.8) {
+        if (g.mode === 'frightened') {
+          // Eat ghost
+          g.mode = 'eaten';
+          state.score += 200;
+        } else {
+          // Cookie caught
+          cookieCaught();
+          return;
+        }
+      }
+    }
+  }
+
+  function cookieCaught() {
+    state.lives--;
+    updateHUD();
+    if (state.lives <= 0) {
+      state.gameOver = true;
+      state.running = false;
+      showOverlay('ゲームオーバー 😢', 'スコア: <span class="highlight">' + state.score + '</span><br>レベル ' + state.level + ' まで到達！', 'もう一回');
+    } else {
+      // Reset positions
+      state.cookie = createCookie();
+      state.ghosts.forEach((g, i) => {
+        g.x = 8 + i;
+        g.y = 9;
+        g.dir = DIR.UP;
+        g.moveProgress = 0;
+        g.mode = 'home';
+        g.homeTimer = i * 80 + 40;
+        g.frightTimer = 0;
+      });
+      state.powerMode = false;
+      state.powerTimer = 0;
+    }
+  }
+
+  // ===== Power mode =====
+  function activatePowerMode() {
+    state.powerMode = true;
+    state.powerTimer = 300;
+    for (const g of state.ghosts) {
+      if (g.mode === 'chase' || g.mode === 'scatter') {
+        g.mode = 'frightened';
+        g.frightTimer = 300;
+        g.dir = oppositeDir(g.dir);
+      }
+    }
+  }
+
+  // ===== Level clear =====
+  function levelClear() {
+    state.level++;
+    if (state.level > 3) {
+      state.running = false;
+      state.won = true;
+      showOverlay('🎉 全クリおめでとう！ 🎉', 'スコア: <span class="highlight">' + state.score + '</span><br>すべてのレベルをクリアしたよ！', 'もう一回');
+    } else {
+      state.score += 500;
+      initLevel();
+      updateHUD();
+    }
+  }
+
+  // ===== Drawing =====
+  function draw() {
+    ctx.fillStyle = '#0f0f23';
+    ctx.fillRect(0, 0, W, H);
+
+    drawMaze();
+    drawDots();
+    drawCookie();
+    drawGhosts();
+  }
+
+  function drawMaze() {
+    const wallColor = state.level === 1 ? '#2a4494' : state.level === 2 ? '#1a6e44' : '#6e1a4a';
+    const wallBorder = state.level === 1 ? '#4a6ad4' : state.level === 2 ? '#3aae74' : '#ae3a7a';
+
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (state.maze[r][c] === WALL) {
+          const x = c * TILE;
+          const y = r * TILE;
+          ctx.fillStyle = wallColor;
+          ctx.fillRect(x, y, TILE, TILE);
+
+          // Draw borders only on walkable-adjacent sides
+          ctx.strokeStyle = wallBorder;
+          ctx.lineWidth = 2;
+          if (r > 0 && state.maze[r-1][c] !== WALL) {
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + TILE, y); ctx.stroke();
+          }
+          if (r < ROWS-1 && state.maze[r+1][c] !== WALL) {
+            ctx.beginPath(); ctx.moveTo(x, y + TILE); ctx.lineTo(x + TILE, y + TILE); ctx.stroke();
+          }
+          if (c > 0 && state.maze[r][c-1] !== WALL) {
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + TILE); ctx.stroke();
+          }
+          if (c < COLS-1 && state.maze[r][c+1] !== WALL) {
+            ctx.beginPath(); ctx.moveTo(x + TILE, y); ctx.lineTo(x + TILE, y + TILE); ctx.stroke();
+          }
+        }
+      }
+    }
+  }
+
+  function drawDots() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = c * TILE + TILE / 2;
+        const y = r * TILE + TILE / 2;
+        if (state.maze[r][c] === DOT) {
+          ctx.fillStyle = '#fde68a';
+          ctx.beginPath();
+          ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (state.maze[r][c] === POWER) {
+          const pulse = Math.sin(state.frameTick * 0.1) * 2 + 6;
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(x, y, pulse, 0, Math.PI * 2);
+          ctx.fill();
+          // Glow
+          ctx.fillStyle = 'rgba(245, 158, 11, 0.3)';
+          ctx.beginPath();
+          ctx.arc(x, y, pulse + 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawCookie() {
+    const c = state.cookie;
+    let px = c.x * TILE + TILE / 2;
+    let py = c.y * TILE + TILE / 2;
+
+    // Smooth movement
+    if (c.dir >= 0) {
+      px += DX[c.dir] * c.moveProgress * TILE;
+      py += DY[c.dir] * c.moveProgress * TILE;
+    }
+
+    const r = TILE * 0.45;
+    const mouth = c.mouthAngle;
+
+    // Direction angle for mouth
+    let angle = 0;
+    if (c.dir === DIR.RIGHT) angle = 0;
+    else if (c.dir === DIR.DOWN) angle = Math.PI / 2;
+    else if (c.dir === DIR.LEFT) angle = Math.PI;
+    else if (c.dir === DIR.UP) angle = -Math.PI / 2;
+
+    // Cookie body (warm brown)
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    // Main cookie circle with mouth
+    ctx.fillStyle = '#d4943a';
+    ctx.beginPath();
+    ctx.arc(0, 0, r, mouth, Math.PI * 2 - mouth);
+    ctx.lineTo(0, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Cookie texture - chocolate chips
+    ctx.fillStyle = '#6b3a1f';
+    const chips = [[-3, -4], [4, -2], [-1, 4], [5, 3], [-5, 1]];
+    for (const [cx, cy] of chips) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Cookie highlight
+    ctx.fillStyle = 'rgba(255,220,150,0.4)';
+    ctx.beginPath();
+    ctx.arc(-2, -3, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eye
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(2, -4, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(2.5, -4.5, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawGhosts() {
+    for (const g of state.ghosts) {
+      if (g.mode === 'home') {
+        // Draw floating in home
+        drawGhostSprite(g.x * TILE + TILE/2, g.y * TILE + TILE/2 + Math.sin(state.frameTick * 0.08) * 3, g, true);
+        continue;
+      }
+
+      let px = g.x * TILE + TILE / 2;
+      let py = g.y * TILE + TILE / 2;
+      if (g.dir >= 0) {
+        px += DX[g.dir] * g.moveProgress * TILE;
+        py += DY[g.dir] * g.moveProgress * TILE;
+      }
+
+      if (g.mode === 'eaten') {
+        // Just eyes
+        drawGhostEyes(px, py, g.eyeDir);
+        continue;
+      }
+
+      drawGhostSprite(px, py, g, false);
+    }
+  }
+
+  function drawGhostSprite(px, py, g, inHome) {
+    const r = TILE * 0.45;
+    const frightened = g.mode === 'frightened';
+    const flashing = frightened && g.frightTimer < 80 && Math.floor(state.frameTick / 8) % 2 === 0;
+
+    ctx.save();
+    ctx.translate(px, py);
+
+    // Body
+    if (frightened) {
+      ctx.fillStyle = flashing ? '#fff' : '#2a3aff';
+    } else {
+      ctx.fillStyle = g.color;
+    }
+
+    // Ghost shape: rounded top, wavy bottom
+    ctx.beginPath();
+    ctx.arc(0, -2, r, Math.PI, 0);
+    ctx.lineTo(r, r - 2);
+    // Wavy bottom
+    const wave = Math.sin(state.frameTick * 0.15) * 2;
+    for (let i = 3; i >= -3; i--) {
+      const wx = (i / 3) * r;
+      const wy = r - 2 + ((i + 3) % 2 === 0 ? wave : -wave);
+      ctx.lineTo(wx, wy);
+    }
+    ctx.lineTo(-r, r - 2);
+    ctx.closePath();
+    ctx.fill();
+
+    // Eyes
+    if (frightened) {
+      // Frightened face
+      ctx.fillStyle = flashing ? '#333' : '#fff';
+      ctx.beginPath();
+      ctx.arc(-4, -3, 2.5, 0, Math.PI * 2);
+      ctx.arc(4, -3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      // Wavy mouth
+      ctx.strokeStyle = flashing ? '#333' : '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-5, 3);
+      for (let i = 0; i <= 10; i++) {
+        ctx.lineTo(-5 + i, 3 + (i % 2 === 0 ? -1.5 : 1.5));
+      }
+      ctx.stroke();
+    } else {
+      drawGhostEyes(0, 0, g.eyeDir);
+    }
+
+    ctx.restore();
+  }
+
+  function drawGhostEyes(px, py, dir) {
+    ctx.save();
+    ctx.translate(px, py);
+
+    // Eye whites
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(-4, -3, 3.5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(4, -3, 3.5, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupils
+    let pdx = 0, pdy = 0;
+    if (dir === DIR.LEFT) pdx = -1.5;
+    if (dir === DIR.RIGHT) pdx = 1.5;
+    if (dir === DIR.UP) pdy = -1.5;
+    if (dir === DIR.DOWN) pdy = 1.5;
+
+    ctx.fillStyle = '#1a1a4e';
+    ctx.beginPath();
+    ctx.arc(-4 + pdx, -3 + pdy, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(4 + pdx, -3 + pdy, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ===== HUD =====
+  function updateHUD() {
+    document.getElementById('hud-level').textContent = 'レベル ' + state.level;
+    document.getElementById('hud-score').textContent = 'スコア: ' + state.score;
+    document.getElementById('hud-lives').textContent = '🍪'.repeat(state.lives);
+  }
+
+  // ===== Overlay =====
+  function showOverlay(title, msg, btnText) {
+    const ov = document.getElementById('overlay');
+    ov.classList.remove('hidden');
+    ov.querySelector('h2').textContent = title;
+    ov.querySelector('p').innerHTML = msg;
+    document.getElementById('start-btn').textContent = btnText;
+  }
+
+  function hideOverlay() {
+    document.getElementById('overlay').classList.add('hidden');
+  }
+
+  // ===== Input =====
+  let inputDir = DIR.NONE;
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowUp' || e.key === 'w') { inputDir = DIR.UP; e.preventDefault(); }
+    if (e.key === 'ArrowDown' || e.key === 's') { inputDir = DIR.DOWN; e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'a') { inputDir = DIR.LEFT; e.preventDefault(); }
+    if (e.key === 'ArrowRight' || e.key === 'd') { inputDir = DIR.RIGHT; e.preventDefault(); }
+
+    if (state.running && inputDir !== DIR.NONE) {
+      state.cookie.nextDir = inputDir;
+    }
+  });
+
+  // D-Pad buttons
+  document.querySelectorAll('.dpad-btn').forEach(function(btn) {
+    function handlePress(e) {
+      e.preventDefault();
+      btn.classList.add('active');
+      const d = btn.dataset.dir;
+      if (d === 'up') inputDir = DIR.UP;
+      if (d === 'down') inputDir = DIR.DOWN;
+      if (d === 'left') inputDir = DIR.LEFT;
+      if (d === 'right') inputDir = DIR.RIGHT;
+      if (state.running) state.cookie.nextDir = inputDir;
+    }
+    function handleRelease(e) {
+      e.preventDefault();
+      btn.classList.remove('active');
+    }
+    btn.addEventListener('touchstart', handlePress, { passive: false });
+    btn.addEventListener('touchend', handleRelease, { passive: false });
+    btn.addEventListener('mousedown', handlePress);
+    btn.addEventListener('mouseup', handleRelease);
+    btn.addEventListener('mouseleave', handleRelease);
+  });
+
+  // Swipe controls on canvas
+  let touchStartX = 0, touchStartY = 0;
+  canvas.addEventListener('touchstart', function(e) {
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', function(e) {
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 15) return;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      inputDir = dx > 0 ? DIR.RIGHT : DIR.LEFT;
+    } else {
+      inputDir = dy > 0 ? DIR.DOWN : DIR.UP;
+    }
+    if (state.running) state.cookie.nextDir = inputDir;
+    e.preventDefault();
+  }, { passive: false });
+
+  // Start button
+  document.getElementById('start-btn').addEventListener('click', function() {
+    startGame();
+  });
+
+  // ===== Game Loop =====
+  function gameLoop() {
+    if (state.running) {
+      state.frameTick++;
+
+      moveCookie();
+      moveGhosts();
+      checkCollisions();
+
+      // Power mode timer
+      if (state.powerMode) {
+        state.powerTimer--;
+        if (state.powerTimer <= 0) {
+          state.powerMode = false;
+        }
+      }
+
+      updateHUD();
+    }
+
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Start the render loop
+  draw();
+  requestAnimationFrame(gameLoop);
+
+})();
+</script>
+</body>
+</html>
