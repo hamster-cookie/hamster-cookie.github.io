@@ -1107,6 +1107,9 @@
     requestAnimationFrame(gameLoop);
   }
 
+  // Initialize level so draw() can render the maze behind the overlay
+  initLevel();
+
   // Start the render loop
   draw();
   requestAnimationFrame(gameLoop);
