@@ -376,6 +376,7 @@
       moveProgress: 0,
       mouthAngle: 0,
       mouthDir: 1,
+      stopAtNextTile: false,
     };
   }
 
@@ -529,7 +530,10 @@
       }
 
       // Continue or stop
-      if (!canMove(c.x, c.y, c.dir)) {
+      if (c.stopAtNextTile) {
+        c.dir = DIR.NONE;
+        c.stopAtNextTile = false;
+      } else if (!canMove(c.x, c.y, c.dir)) {
         c.dir = DIR.NONE;
       }
     }
@@ -1204,28 +1208,46 @@
     btn.addEventListener('mouseleave', handleRelease);
   });
 
-  // Swipe controls on canvas
-  let touchStartX = 0, touchStartY = 0;
+  // Drag-follow touch controls on canvas
+  let touchActive = false;
+  let lastTouchX = 0, lastTouchY = 0;
+
   canvas.addEventListener('touchstart', function(e) {
     const t = e.touches[0];
-    touchStartX = t.clientX;
-    touchStartY = t.clientY;
+    lastTouchX = t.clientX;
+    lastTouchY = t.clientY;
+    touchActive = true;
+    // Clear stopAtNextTile since finger is down
+    if (state.cookie) state.cookie.stopAtNextTile = false;
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', function(e) {
+    if (!touchActive || !state.running) return;
+    const t = e.touches[0];
+    const dx = t.clientX - lastTouchX;
+    const dy = t.clientY - lastTouchY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist > 8) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        inputDir = dx > 0 ? DIR.RIGHT : DIR.LEFT;
+      } else {
+        inputDir = dy > 0 ? DIR.DOWN : DIR.UP;
+      }
+      state.cookie.nextDir = inputDir;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+    }
     e.preventDefault();
   }, { passive: false });
 
   canvas.addEventListener('touchend', function(e) {
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchStartX;
-    const dy = t.clientY - touchStartY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 15) return;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      inputDir = dx > 0 ? DIR.RIGHT : DIR.LEFT;
-    } else {
-      inputDir = dy > 0 ? DIR.DOWN : DIR.UP;
+    touchActive = false;
+    // Stop the hamster at the next tile boundary
+    if (state.running && state.cookie) {
+      state.cookie.stopAtNextTile = true;
     }
-    if (state.running) state.cookie.nextDir = inputDir;
     e.preventDefault();
   }, { passive: false });
 
