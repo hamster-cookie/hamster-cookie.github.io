@@ -201,10 +201,11 @@
   <div id="overlay">
     <h2>🐹 クッキーエスケープ 🐹</h2>
     <p>
-      ハムスターのクッキーを動かして、<span class="highlight">ヘビ</span>から逃げよう！<br>
+      ハムスターのクッキーを動かして、<span class="highlight">敵</span>から逃げよう！<br>
       ひまわりの種を全部食べたらクリア！<br><br>
+      🐍 レベル1: ヘビ &nbsp; 🦖 レベル2: 恐竜 &nbsp; 🐻 レベル3: グリズリーベア<br><br>
       🎮 矢印キー / スワイプ / D-Pad で操作<br>
-      🍪 クッキーを取ると、ヘビをやっつけられるよ！
+      🍪 クッキーを取ると、敵をやっつけられるよ！
     </p>
     <button id="start-btn">スタート</button>
     <a href="index.html" id="home-btn" class="hidden" style="display:none; margin-top:10px; padding:10px 30px; font-family:'Nunito',sans-serif; font-size:0.9rem; font-weight:700; border:2px solid #a78bfa; border-radius:50px; background:transparent; color:#a78bfa; text-decoration:none; transition:transform 0.15s;">ホームページへ</a>
@@ -250,9 +251,15 @@
   const GHOST_HOME = 4;
   const TUNNEL = 5;
 
-  // Snake colors
-  const GHOST_COLORS = ['#4a8c3f', '#8b4513', '#6b6b6b', '#8b0000'];
-  const GHOST_NAMES = ['ミドリ', 'チャイロ', 'グレー', 'アカヘビ'];
+  // Enemy config per level: type, colors, names
+  const ENEMY_TYPES = {
+    1: { type: 'snake', colors: ['#4a8c3f', '#8b4513', '#6b6b6b', '#8b0000'], names: ['ミドリ', 'チャイロ', 'グレー', 'アカヘビ'], label: 'ヘビ' },
+    2: { type: 'dino',  colors: ['#2e8b57', '#b8860b', '#708090', '#a0522d'], names: ['ラプトル', 'ティラノ', 'トリケラ', 'プテラ'], label: '恐竜' },
+    3: { type: 'bear',  colors: ['#6b4226', '#8b6914', '#5c4033', '#7a3b2e'], names: ['グリズリー', 'コディアック', 'ヒグマ', 'ツキノワ'], label: 'グリズリーベア' },
+  };
+  function getEnemyConfig() { return ENEMY_TYPES[state.level] || ENEMY_TYPES[1]; }
+  const GHOST_COLORS = ENEMY_TYPES[1].colors;
+  const GHOST_NAMES = ENEMY_TYPES[1].names;
 
   // ===== Maze layouts per level =====
   // 1=wall, 0=dot, 2=empty, 3=power, 4=ghost home, 5=tunnel
@@ -388,7 +395,7 @@
       homeX: homeX, homeY: homeY,
       dir: DIR.UP,
       moveProgress: 0,
-      color: GHOST_COLORS[i],
+      color: getEnemyConfig().colors[i],
       mode: 'home', // home, chase, scatter, frightened, eaten
       homeTimer: i * 80 + 40,
       frightTimer: 0,
@@ -719,7 +726,8 @@
     if (state.lives <= 0) {
       state.gameOver = true;
       state.running = false;
-      showOverlay('ゲームオーバー 😢', 'スコア: <span class="highlight">' + state.score + '</span><br>レベル ' + state.level + ' まで到達！', 'もう一回', true);
+      const enemyLabel = getEnemyConfig().label;
+      showOverlay('ゲームオーバー 😢', 'スコア: <span class="highlight">' + state.score + '</span><br>レベル ' + state.level + '（' + enemyLabel + '）まで到達！', 'もう一回', true);
     } else {
       // Reset positions
       state.cookie = createCookie();
@@ -759,8 +767,9 @@
       showOverlay('🎉 全クリおめでとう！ 🎉', 'スコア: <span class="highlight">' + state.score + '</span><br>すべてのレベルをクリアしたよ！', 'もう一回', true);
     } else {
       state.score += 500;
-      initLevel();
-      updateHUD();
+      const nextEnemy = getEnemyConfig();
+      state.running = false;
+      showOverlay('🎉 レベルクリア！ 🎉', 'スコア: <span class="highlight">' + state.score + '</span><br>次の敵は <span class="highlight">' + nextEnemy.label + '</span> だ！気をつけて！', '次のレベルへ', false);
     }
   }
 
@@ -1011,11 +1020,18 @@
   }
 
   function drawGhostSprite(px, py, g, inHome) {
+    const config = getEnemyConfig();
+    if (config.type === 'dino') return drawDinoSprite(px, py, g, inHome);
+    if (config.type === 'bear') return drawBearSprite(px, py, g, inHome);
+    return drawSnakeSprite(px, py, g, inHome);
+  }
+
+  // ===== Snake sprite (Level 1) =====
+  function drawSnakeSprite(px, py, g, inHome) {
     const r = TILE * 0.45;
     const frightened = g.mode === 'frightened';
     const flashing = frightened && g.frightTimer < 80 && Math.floor(state.frameTick / 8) % 2 === 0;
 
-    // Direction angle for snake facing
     let angle = 0;
     if (g.eyeDir === DIR.RIGHT) angle = 0;
     else if (g.eyeDir === DIR.DOWN) angle = Math.PI / 2;
@@ -1026,18 +1042,16 @@
     ctx.translate(px, py);
     ctx.rotate(angle);
 
-    // Snake body color
     let bodyColor, bodyDark;
     if (frightened) {
       bodyColor = flashing ? '#aaddaa' : '#5577ff';
       bodyDark = flashing ? '#77aa77' : '#3355cc';
     } else {
       bodyColor = g.color;
-      // Darker shade for patterns
       bodyDark = shadeColor(g.color, -30);
     }
 
-    // Snake body (coiled segments trailing behind head)
+    // Trailing segments
     const segCount = 4;
     const waveAmp = 3;
     for (let s = segCount; s >= 1; s--) {
@@ -1050,64 +1064,256 @@
       ctx.fill();
     }
 
-    // Snake head (larger, triangular/oval)
+    // Head
     ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Scale pattern on head
     ctx.fillStyle = bodyDark;
-    ctx.beginPath();
-    ctx.arc(-2, -3, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(2, 3, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(-2, -3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(2, 3, 2, 0, Math.PI * 2); ctx.fill();
 
-    // Eyes
     if (frightened) {
-      // Frightened: dizzy eyes
       ctx.fillStyle = flashing ? '#333' : '#fff';
       ctx.beginPath();
       ctx.arc(3, -3, 2.5, 0, Math.PI * 2);
       ctx.arc(3, 3, 2.5, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Normal snake eyes (slit pupils)
       ctx.fillStyle = '#ffe44d';
-      ctx.beginPath();
-      ctx.arc(4, -3, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(4, 3, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      // Slit pupils
+      ctx.beginPath(); ctx.arc(4, -3, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(4, 3, 2.5, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#111';
-      ctx.beginPath();
-      ctx.ellipse(4, -3, 0.8, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(4, 3, 0.8, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.ellipse(4, -3, 0.8, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(4, 3, 0.8, 2.2, 0, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Forked tongue (flicking animation)
     const tongueOut = Math.sin(state.frameTick * 0.2) > 0;
     if (tongueOut && !frightened) {
       const tongueLen = 5 + Math.sin(state.frameTick * 0.3) * 2;
       ctx.strokeStyle = '#ff3355';
       ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(r, 0); ctx.lineTo(r + tongueLen, 0); ctx.lineTo(r + tongueLen + 2, -2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r + tongueLen, 0); ctx.lineTo(r + tongueLen + 2, 2); ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // ===== Dinosaur sprite (Level 2) =====
+  function drawDinoSprite(px, py, g, inHome) {
+    const r = TILE * 0.45;
+    const frightened = g.mode === 'frightened';
+    const flashing = frightened && g.frightTimer < 80 && Math.floor(state.frameTick / 8) % 2 === 0;
+
+    let angle = 0;
+    if (g.eyeDir === DIR.RIGHT) angle = 0;
+    else if (g.eyeDir === DIR.DOWN) angle = Math.PI / 2;
+    else if (g.eyeDir === DIR.LEFT) angle = Math.PI;
+    else if (g.eyeDir === DIR.UP) angle = -Math.PI / 2;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    let bodyColor, bodyDark;
+    if (frightened) {
+      bodyColor = flashing ? '#aaddaa' : '#5577ff';
+      bodyDark = flashing ? '#77aa77' : '#3355cc';
+    } else {
+      bodyColor = g.color;
+      bodyDark = shadeColor(g.color, -30);
+    }
+
+    // Tail (thick, tapering)
+    const tailWave = Math.sin(state.frameTick * 0.1) * 2;
+    ctx.fillStyle = bodyDark;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.5, 0);
+    ctx.lineTo(-r * 1.8, tailWave - 2);
+    ctx.lineTo(-r * 1.6, tailWave + 1);
+    ctx.closePath();
+    ctx.fill();
+
+    // Body (upright oval, dinosaur torso)
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.85, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Belly (lighter)
+    ctx.fillStyle = frightened ? bodyColor : shadeColor(g.color, 40);
+    ctx.beginPath();
+    ctx.ellipse(1, 2, r * 0.5, r * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Spines on back
+    if (!frightened) {
+      ctx.fillStyle = shadeColor(g.color, -50);
+      for (let i = 0; i < 3; i++) {
+        const sx = -3 + i * 4;
+        const sy = -r * 0.85;
+        ctx.beginPath();
+        ctx.moveTo(sx - 2, sy + 2);
+        ctx.lineTo(sx, sy - 3);
+        ctx.lineTo(sx + 2, sy + 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Small arms
+    ctx.strokeStyle = bodyDark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(4, 1); ctx.lineTo(7, 4); ctx.lineTo(6, 6); ctx.stroke();
+
+    // Eyes
+    if (frightened) {
+      ctx.fillStyle = flashing ? '#333' : '#fff';
       ctx.beginPath();
-      ctx.moveTo(r, 0);
-      ctx.lineTo(r + tongueLen, 0);
-      // Fork
-      ctx.lineTo(r + tongueLen + 2, -2);
-      ctx.stroke();
+      ctx.arc(4, -4, 2.5, 0, Math.PI * 2);
+      ctx.arc(4, 3, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Dino eyes (round, reptilian)
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(5, -3, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(5, 3, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#cc2200';
+      ctx.beginPath(); ctx.arc(5.5, -3, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(5.5, 3, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.arc(6, -3, 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(6, 3, 0.9, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Jaw/mouth with teeth
+    if (!frightened) {
+      const jawOpen = Math.sin(state.frameTick * 0.15) * 0.5 + 0.5;
+      ctx.fillStyle = bodyDark;
+      // Upper jaw
       ctx.beginPath();
-      ctx.moveTo(r + tongueLen, 0);
-      ctx.lineTo(r + tongueLen + 2, 2);
-      ctx.stroke();
+      ctx.moveTo(r * 0.6, -r * 0.35);
+      ctx.lineTo(r + 2, -1 * jawOpen);
+      ctx.lineTo(r * 0.6, 0);
+      ctx.closePath();
+      ctx.fill();
+      // Lower jaw
+      ctx.beginPath();
+      ctx.moveTo(r * 0.6, r * 0.35);
+      ctx.lineTo(r + 2, 1 * jawOpen);
+      ctx.lineTo(r * 0.6, 0);
+      ctx.closePath();
+      ctx.fill();
+      // Teeth
+      ctx.fillStyle = '#fff';
+      for (let t = 0; t < 3; t++) {
+        const tx = r * 0.65 + t * 2.5;
+        ctx.beginPath(); ctx.moveTo(tx, -1); ctx.lineTo(tx + 1, 0.5); ctx.lineTo(tx + 2, -1); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(tx, 1); ctx.lineTo(tx + 1, -0.5); ctx.lineTo(tx + 2, 1); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // ===== Grizzly Bear sprite (Level 3) =====
+  function drawBearSprite(px, py, g, inHome) {
+    const r = TILE * 0.45;
+    const frightened = g.mode === 'frightened';
+    const flashing = frightened && g.frightTimer < 80 && Math.floor(state.frameTick / 8) % 2 === 0;
+
+    let angle = 0;
+    if (g.eyeDir === DIR.RIGHT) angle = 0;
+    else if (g.eyeDir === DIR.DOWN) angle = Math.PI / 2;
+    else if (g.eyeDir === DIR.LEFT) angle = Math.PI;
+    else if (g.eyeDir === DIR.UP) angle = -Math.PI / 2;
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(angle);
+
+    let bodyColor, bodyDark;
+    if (frightened) {
+      bodyColor = flashing ? '#aaddaa' : '#5577ff';
+      bodyDark = flashing ? '#77aa77' : '#3355cc';
+    } else {
+      bodyColor = g.color;
+      bodyDark = shadeColor(g.color, -25);
+    }
+
+    // Body (big round bear body)
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ears (round bear ears)
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath(); ctx.arc(-5, -r + 1, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -r + 1, 4, 0, Math.PI * 2); ctx.fill();
+    // Inner ears
+    ctx.fillStyle = frightened ? bodyDark : shadeColor(g.color, 30);
+    ctx.beginPath(); ctx.arc(-5, -r + 1, 2.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5, -r + 1, 2.2, 0, Math.PI * 2); ctx.fill();
+
+    // Muzzle (lighter snout area)
+    ctx.fillStyle = frightened ? bodyColor : shadeColor(g.color, 50);
+    ctx.beginPath();
+    ctx.ellipse(4, 0, 4, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nose
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.ellipse(6.5, 0, 2, 1.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes
+    if (frightened) {
+      ctx.fillStyle = flashing ? '#333' : '#fff';
+      ctx.beginPath();
+      ctx.arc(3, -4, 2.5, 0, Math.PI * 2);
+      ctx.arc(3, 4, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Bear eyes (small, dark, beady)
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(4, -3.5, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(4, 3.5, 2, 0, Math.PI * 2); ctx.fill();
+      // Eye highlights
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(4.5, -4, 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(4.5, 3, 0.7, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Mouth (angry growl)
+    if (!frightened) {
+      const growl = Math.sin(state.frameTick * 0.12) > 0.3;
+      if (growl) {
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(7, 0, 2, -Math.PI * 0.4, Math.PI * 0.4);
+        ctx.stroke();
+        // Fangs
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.moveTo(6, -1.5); ctx.lineTo(6.5, -3); ctx.lineTo(7, -1.5); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(6, 1.5); ctx.lineTo(6.5, 3); ctx.lineTo(7, 1.5); ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // Claws (visible on walking animation)
+    if (!frightened) {
+      const clawPhase = Math.sin(state.frameTick * 0.15);
+      ctx.strokeStyle = '#ddd';
+      ctx.lineWidth = 0.8;
+      // Front claws
+      ctx.beginPath(); ctx.moveTo(r - 1, -r * 0.6); ctx.lineTo(r + 2 + clawPhase, -r * 0.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r - 1, -r * 0.4); ctx.lineTo(r + 2 + clawPhase, -r * 0.4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r - 1, r * 0.6); ctx.lineTo(r + 2 + clawPhase, r * 0.7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(r - 1, r * 0.4); ctx.lineTo(r + 2 + clawPhase, r * 0.4); ctx.stroke();
     }
 
     ctx.restore();
@@ -1122,33 +1328,44 @@
   }
 
   function drawGhostEyes(px, py, dir) {
-    // For eaten snakes - show just eyes floating back
+    const config = getEnemyConfig();
     ctx.save();
     ctx.translate(px, py);
 
-    // Yellow snake eyes
-    ctx.fillStyle = '#ffe44d';
-    ctx.beginPath();
-    ctx.arc(-3, -4, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(3, -4, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Slit pupils
     let pdx = 0, pdy = 0;
     if (dir === DIR.LEFT) pdx = -1.5;
     if (dir === DIR.RIGHT) pdx = 1.5;
     if (dir === DIR.UP) pdy = -1.5;
     if (dir === DIR.DOWN) pdy = 1.5;
 
-    ctx.fillStyle = '#111';
-    ctx.beginPath();
-    ctx.ellipse(-3 + pdx, -4 + pdy, 0.8, 2.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(3 + pdx, -4 + pdy, 0.8, 2.2, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (config.type === 'dino') {
+      // Dino eyes (white with red iris)
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(-3, -4, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3, -4, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#cc2200';
+      ctx.beginPath(); ctx.arc(-3 + pdx, -4 + pdy, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3 + pdx, -4 + pdy, 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.arc(-3 + pdx, -4 + pdy, 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3 + pdx, -4 + pdy, 0.9, 0, Math.PI * 2); ctx.fill();
+    } else if (config.type === 'bear') {
+      // Bear eyes (small beady dark eyes)
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(-3, -4, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3, -4, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(-2.5 + pdx, -4.5 + pdy, 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3.5 + pdx, -4.5 + pdy, 0.8, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // Snake eyes (yellow with slit pupils)
+      ctx.fillStyle = '#ffe44d';
+      ctx.beginPath(); ctx.arc(-3, -4, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(3, -4, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.beginPath(); ctx.ellipse(-3 + pdx, -4 + pdy, 0.8, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(3 + pdx, -4 + pdy, 0.8, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+    }
 
     ctx.restore();
   }
@@ -1271,9 +1488,17 @@
     e.preventDefault();
   }, { passive: false });
 
-  // Start button
+  // Start button (handles both game start and level transitions)
   document.getElementById('start-btn').addEventListener('click', function() {
-    startGame();
+    if (state.level > 1 && !state.gameOver && !state.won && state.lives > 0) {
+      // Continue to next level
+      initLevel();
+      state.running = true;
+      updateHUD();
+      hideOverlay();
+    } else {
+      startGame();
+    }
   });
 
   // ===== Game Loop =====
