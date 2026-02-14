@@ -321,79 +321,120 @@ const LEVELS = {
   1: {
     name: 'ひまわりの種',
     description: 'ひまわりの種をキャッチしよう！',
-    targetScore: 200,
+    targetScore: 400,
     spawnInterval: 45,
     speed: 2.8,
     // Difficulty scaling within the level (applied as score approaches target)
-    endSpeedBonus: 0.8,
-    endSpawnReduction: 8,
+    endSpeedBonus: 1.0,
+    endSpawnReduction: 10,
     items: [
-      { type: 'sunflower_seed', chance: 0.85, points: 10, good: true },
-      { type: 'poop', chance: 0.15, points: 0, good: false, damage: 15 }
+      { type: 'sunflower_seed', chance: 0.80, points: 10, good: true },
+      { type: 'poop', chance: 0.20, points: 0, good: false, damage: 15 }
     ]
   },
   2: {
     name: 'ブロッコリー',
     description: 'ブロッコリーをキャッチ！うんちに気をつけて！',
-    targetScore: 350,
-    spawnInterval: 38,
-    speed: 3.4,
-    endSpeedBonus: 1.2,
-    endSpawnReduction: 10,
+    targetScore: 800,
+    spawnInterval: 32,
+    speed: 3.8,
+    endSpeedBonus: 2.0,
+    endSpawnReduction: 14,
     items: [
-      { type: 'broccoli', chance: 0.60, points: 15, good: true },
-      { type: 'poop', chance: 0.25, points: 0, good: false, damage: 20 },
-      { type: 'can', chance: 0.15, points: 0, good: false, damage: 25 }
+      { type: 'broccoli', chance: 0.38, points: 15, good: true },
+      { type: 'poop', chance: 0.32, points: 0, good: false, damage: 25 },
+      { type: 'can', chance: 0.30, points: 0, good: false, damage: 30 }
     ]
   },
   3: {
     name: 'クッキー',
     description: 'クッキーをキャッチ！危険がいっぱい！',
-    targetScore: 500,
-    spawnInterval: 30,
-    speed: 4.2,
-    endSpeedBonus: 1.5,
+    targetScore: 1500,
+    spawnInterval: 24,
+    speed: 4.8,
+    endSpeedBonus: 2.5,
     endSpawnReduction: 10,
     items: [
-      { type: 'cookie_food', chance: 0.40, points: 20, good: true },
-      { type: 'poop', chance: 0.32, points: 0, good: false, damage: 22 },
-      { type: 'can', chance: 0.28, points: 0, good: false, damage: 28 }
+      { type: 'cookie_food', chance: 0.28, points: 20, good: true },
+      { type: 'poop', chance: 0.38, points: 0, good: false, damage: 28 },
+      { type: 'can', chance: 0.34, points: 0, good: false, damage: 35 }
     ]
   }
 };
 
 // Drawing functions
 
-function drawTree(x, leavesColor) {
-  const sway = Math.sin(game.treeSway + x * 0.01) * 3;
-  // Trunk
-  ctx.fillStyle = '#8d6e63';
-  ctx.fillRect(x - 8, 0, 16, 80);
-  // Branches
-  ctx.fillStyle = '#6d4c41';
+function drawTrees() {
+  const sway = Math.sin(game.treeSway) * 2;
+  const trunkW = 28;
+  const trunkH = 120;
+
+  // Left trunk - on the left edge
+  ctx.fillStyle = '#795548';
+  ctx.fillRect(-4, 0, trunkW, trunkH);
+  // Bark detail
+  ctx.fillStyle = '#6D4C41';
+  ctx.fillRect(2, 10, 6, 30);
+  ctx.fillRect(8, 50, 5, 25);
+  ctx.fillRect(3, 85, 7, 20);
+  // Left branches
+  ctx.fillStyle = '#6D4C41';
   ctx.beginPath();
-  ctx.moveTo(x - 8, 40);
-  ctx.lineTo(x - 30 + sway, 20);
-  ctx.lineTo(x - 25 + sway, 15);
-  ctx.lineTo(x - 5, 35);
+  ctx.moveTo(trunkW - 4, 40);
+  ctx.lineTo(trunkW + 25 + sway, 25);
+  ctx.lineTo(trunkW + 20 + sway, 20);
+  ctx.lineTo(trunkW - 8, 35);
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(x + 8, 30);
-  ctx.lineTo(x + 35 + sway, 10);
-  ctx.lineTo(x + 30 + sway, 5);
-  ctx.lineTo(x + 5, 25);
+  ctx.moveTo(trunkW - 4, 65);
+  ctx.lineTo(trunkW + 30 + sway, 55);
+  ctx.lineTo(trunkW + 25 + sway, 50);
+  ctx.lineTo(trunkW - 8, 60);
   ctx.fill();
-  // Leaves
-  ctx.fillStyle = leavesColor;
+
+  // Right trunk - on the right edge
+  ctx.fillStyle = '#795548';
+  ctx.fillRect(W - trunkW + 4, 0, trunkW, trunkH);
+  // Bark detail
+  ctx.fillStyle = '#6D4C41';
+  ctx.fillRect(W - 18, 15, 6, 25);
+  ctx.fillRect(W - 12, 55, 5, 20);
+  ctx.fillRect(W - 20, 80, 7, 22);
+  // Right branches
+  ctx.fillStyle = '#6D4C41';
   ctx.beginPath();
-  ctx.arc(x + sway, -5, 35, 0, Math.PI * 2);
+  ctx.moveTo(W - trunkW + 4, 45);
+  ctx.lineTo(W - trunkW - 28 - sway, 30);
+  ctx.lineTo(W - trunkW - 23 - sway, 25);
+  ctx.lineTo(W - trunkW + 8, 40);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(x - 20 + sway, 10, 25, 0, Math.PI * 2);
+  ctx.moveTo(W - trunkW + 4, 70);
+  ctx.lineTo(W - trunkW - 25 - sway, 60);
+  ctx.lineTo(W - trunkW - 20 - sway, 55);
+  ctx.lineTo(W - trunkW + 8, 65);
   ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x + 22 + sway, 8, 27, 0, Math.PI * 2);
-  ctx.fill();
+
+  // Leaf canopy across the top of the screen
+  const leafColors = ['#4CAF50', '#66BB6A', '#43A047', '#388E3C', '#2E7D32'];
+  // Back layer of leaves (larger, darker)
+  for (let i = 0; i < 8; i++) {
+    const lx = i * 55 - 10 + Math.sin(game.treeSway + i * 0.8) * 3;
+    const ly = -8 + Math.cos(game.treeSway + i * 0.5) * 2;
+    ctx.fillStyle = leafColors[(i + 2) % leafColors.length];
+    ctx.beginPath();
+    ctx.arc(lx, ly, 32 + (i % 3) * 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Front layer of leaves (smaller, lighter)
+  for (let i = 0; i < 10; i++) {
+    const lx = i * 44 - 20 + Math.sin(game.treeSway + i * 1.2) * 2;
+    const ly = 5 + Math.sin(game.treeSway + i * 0.7) * 3;
+    ctx.fillStyle = leafColors[i % leafColors.length];
+    ctx.beginPath();
+    ctx.arc(lx, ly, 24 + (i % 2) * 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawBackground() {
@@ -428,12 +469,8 @@ function drawBackground() {
     ctx.fill();
   }
 
-  // Trees
-  const leavesColors = ['#4CAF50', '#66BB6A', '#43A047'];
-  drawTree(50, leavesColors[0]);
-  drawTree(160, leavesColors[1]);
-  drawTree(280, leavesColors[2]);
-  drawTree(370, leavesColors[0]);
+  // Trees (trunks on edges, leaf canopy at top)
+  drawTrees();
 }
 
 function drawHamster(x, y) {
